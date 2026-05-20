@@ -230,6 +230,20 @@ You need two files:
 
 Copy `version.dll` and `config.json` to Antigravity’s main program directory (next to `Antigravity.exe`). Then launch Antigravity — done.
 
+If you use **Antigravity CLI**, copy the same files next to `agy.exe`:
+
+```powershell
+cd "$env:LOCALAPPDATA\agy\bin"
+```
+
+This repository also includes a deployment script. After building, run:
+
+```powershell
+.\scripts\deploy-antigravity.ps1
+```
+
+By default it deploys to Antigravity IDE and Antigravity CLI. Pass `-IncludeDesktop` only when you want to deploy to Antigravity 2.0 for diagnostics.
+
 #### Common Windows Path + Quick Jump
 
 In most cases, Antigravity is installed at:
@@ -697,9 +711,26 @@ Edit `config.json`:
         "recv": 5000
     },
     "child_injection": true,
-    "target_processes": []
+    "child_injection_mode": "filtered",
+    "target_processes": [
+        "agy.exe",
+        "Antigravity.exe",
+        "Antigravity IDE.exe",
+        "language_server.exe",
+        "language_server_windows",
+        "node.exe"
+    ],
+    "proxy_rules": {
+        "allowed_ports": [80, 443],
+        "dns_mode": "direct",
+        "ipv6_mode": "proxy",
+        "udp_mode": "block",
+        "udp_fallback": "block"
+    }
 }
 ```
+
+If your proxy client separates mixed-port and SOCKS5 ports, make sure `proxy.type` matches `proxy.port`. Clash/Mihomo often use `7890` for mixed-port and `7891` for a dedicated SOCKS5 port.
 
 #### Step 3: Deploy DLL
 
@@ -713,6 +744,40 @@ Target Application Directory/
 ```
 
 Launch the target application, done! 🎉
+
+#### Antigravity CLI
+
+Antigravity CLI is usually located at:
+
+```powershell
+$env:LOCALAPPDATA\agy\bin\agy.exe
+```
+
+Put `version.dll` and `config.json` next to `agy.exe`. After launching the CLI, check:
+
+```powershell
+Get-ChildItem "$env:LOCALAPPDATA\agy\bin\logs"
+```
+
+If launching `agy.exe` directly does not create proxy logs, use the built `agy-proxy-launcher.exe` instead:
+
+```powershell
+agyp
+```
+
+The launcher starts `agy.exe`, injects the colocated `version.dll`, then waits for the CLI process to exit. For a light validation run:
+
+```powershell
+agyp -- --version
+```
+
+If the log contains `Antigravity-Proxy DLL 已加载` and `所有 API Hook 安装成功`, the CLI is covered by the launcher. After real network requests, check for `SOCKS5: 隧道建立成功`.
+
+`agyp` inherits the current working directory by default, so running it from a project directory starts Antigravity CLI in that project. To override it explicitly:
+
+```powershell
+agyp --cwd "E:\your\project"
+```
 
 ### Configuration Reference
 

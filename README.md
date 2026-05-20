@@ -232,6 +232,20 @@ curl -x http://127.0.0.1:7890 https://www.google.com -I
 
 把 `version.dll` 和 `config.json` 复制到 **Antigravity 主程序目录**（与 `Antigravity.exe` 同级）。然后启动 Antigravity，搞定。
 
+如果你使用 **Antigravity CLI**，也需要把同一组文件复制到 `agy.exe` 同级目录：
+
+```powershell
+cd "$env:LOCALAPPDATA\agy\bin"
+```
+
+本仓库也提供部署脚本。构建后可执行：
+
+```powershell
+.\scripts\deploy-antigravity.ps1
+```
+
+默认会部署到 Antigravity IDE 和 Antigravity CLI；Antigravity 2.0 仅用于诊断时可加 `-IncludeDesktop`。
+
 #### Windows 常见目录 + 快速跳转
 
 一般情况下 Antigravity 会装在：
@@ -721,14 +735,26 @@ target_link_libraries(version PRIVATE ws2_32)
         "recv": 5000
     },
     "child_injection": true,
-    "target_processes": [],
+    "child_injection_mode": "filtered",
+    "target_processes": [
+        "agy.exe",
+        "Antigravity.exe",
+        "Antigravity IDE.exe",
+        "language_server.exe",
+        "language_server_windows",
+        "node.exe"
+    ],
     "proxy_rules": {
         "allowed_ports": [80, 443],
         "dns_mode": "direct",
-        "ipv6_mode": "proxy"
+        "ipv6_mode": "proxy",
+        "udp_mode": "block",
+        "udp_fallback": "block"
     }
 }
 ```
+
+如果你的代理软件区分 mixed-port 和 SOCKS5 端口，请确认 `proxy.type` 和 `proxy.port` 匹配。Clash/Mihomo 常见 mixed-port 是 `7890`，SOCKS5 独立端口常见是 `7891`。
 
 #### Step 3: 部署 DLL / Deploy DLL
 
@@ -742,6 +768,40 @@ target_link_libraries(version PRIVATE ws2_32)
 ```
 
 启动目标程序，完成！🎉
+
+#### Antigravity CLI
+
+Antigravity CLI 的主程序通常位于：
+
+```powershell
+$env:LOCALAPPDATA\agy\bin\agy.exe
+```
+
+将 `version.dll` 和 `config.json` 放到 `agy.exe` 同级目录。启动 CLI 后，优先检查：
+
+```powershell
+Get-ChildItem "$env:LOCALAPPDATA\agy\bin\logs"
+```
+
+如果直接启动 `agy.exe` 没有生成代理日志，请改用构建产物里的 `agy-proxy-launcher.exe`：
+
+```powershell
+agyp
+```
+
+该启动器会启动 `agy.exe`、注入同目录 `version.dll`，然后等待 CLI 退出。先用下面命令做轻量验证：
+
+```powershell
+agyp -- --version
+```
+
+如果日志里出现 `Antigravity-Proxy DLL 已加载` 和 `所有 API Hook 安装成功`，说明 CLI 已被 launcher 覆盖。实际发起请求后，再看是否出现 `SOCKS5: 隧道建立成功`。
+
+`agyp` 默认会继承你运行命令时的当前工作目录，因此在项目目录里执行 `agyp` 会让 Antigravity CLI 进入该项目目录。需要显式指定目录时可用：
+
+```powershell
+agyp --cwd "E:\your\project"
+```
 
 ### 配置文件详解 / Configuration Reference
 

@@ -105,6 +105,14 @@ target_include_directories(version PRIVATE "src/hde/")
 # Link WS2_32
 target_link_libraries(version PRIVATE ws2_32)
 
+# CLI launcher: starts agy.exe suspended, injects version.dll, then resumes it.
+add_executable(agy-proxy-launcher
+  "src/tools/AgyProxyLauncher.cpp"
+)
+target_include_directories(agy-proxy-launcher PRIVATE
+  "${CMAKE_CURRENT_SOURCE_DIR}/src"
+)
+
 if(WIN32)
   set_target_properties(version PROPERTIES PREFIX "")
   if(CMAKE_SIZEOF_VOID_P EQUAL 8)   

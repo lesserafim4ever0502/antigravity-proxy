@@ -713,6 +713,15 @@ static LPFN_CONNECTEX GetOriginalConnectExForSocket(SOCKET s) {
 static void LogRuntimeConfigSummaryOnce() {
     std::call_once(g_runtimeConfigLogOnce, []() {
         const auto& config = Core::Config::Instance();
+        char processPath[MAX_PATH] = {0};
+        std::string processName = "(unknown)";
+        if (GetModuleFileNameA(NULL, processPath, MAX_PATH) > 0) {
+            processName = processPath;
+            const size_t slash = processName.find_last_of("\\/");
+            if (slash != std::string::npos) {
+                processName = processName.substr(slash + 1);
+            }
+        }
 
         std::string ports;
         if (config.rules.allowed_ports.empty()) {
@@ -724,6 +733,7 @@ static void LogRuntimeConfigSummaryOnce() {
             }
         }
 
+        Core::Logger::Info("运行进程: name=" + processName + ", pid=" + std::to_string(GetCurrentProcessId()));
         Core::Logger::Info(
             "配置摘要: proxy=" + config.proxy.type + "://" + config.proxy.host + ":" + std::to_string(config.proxy.port) +
             ", fake_ip=" + std::string(config.fakeIp.enabled ? "开" : "关") +
