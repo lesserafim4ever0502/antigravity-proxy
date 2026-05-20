@@ -3,7 +3,7 @@
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
     [string]$OutputDir = (Join-Path $PSScriptRoot "..\output"),
-    [string]$IdeDir = "E:\download\Antigravity",
+    [string]$IdeDir = "",
     [string]$CliDir = "$env:LOCALAPPDATA\agy\bin",
     [string]$DesktopDir = "$env:LOCALAPPDATA\Programs\antigravity",
     [switch]$IncludeDesktop,
@@ -46,6 +46,10 @@ function Deploy-ToTarget {
         [Parameter(Mandatory = $true)][string]$DllSource,
         [Parameter(Mandatory = $true)][string]$ConfigSource
     )
+
+    if ([string]::IsNullOrWhiteSpace($TargetDir)) {
+        return
+    }
 
     if (-not (Test-Path -LiteralPath $TargetDir)) {
         Write-Warning "Skip missing directory: $TargetDir"
@@ -110,7 +114,11 @@ if (-not (Test-Path -LiteralPath $launcherSource)) {
     throw "Missing artifact: $launcherSource. Run .\build.ps1 first."
 }
 
-Deploy-ToTarget -TargetDir $IdeDir -ExeName "Antigravity IDE.exe" -DllSource $dllSource -ConfigSource $configSource
+if ($IdeDir) {
+    Deploy-ToTarget -TargetDir $IdeDir -ExeName "Antigravity IDE.exe" -DllSource $dllSource -ConfigSource $configSource
+} else {
+    Write-Host "Antigravity IDE deployment skipped. Pass -IdeDir <path> if your IDE is installed in a custom directory."
+}
 Deploy-ToTarget -TargetDir $CliDir -ExeName "agy.exe" -DllSource $dllSource -ConfigSource $configSource
 Deploy-CliLauncher -TargetDir $CliDir -LauncherSource $launcherSource
 

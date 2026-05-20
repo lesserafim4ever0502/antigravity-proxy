@@ -244,7 +244,11 @@ cd "$env:LOCALAPPDATA\agy\bin"
 .\scripts\deploy-antigravity.ps1
 ```
 
-默认会部署到 Antigravity IDE 和 Antigravity CLI；Antigravity 2.0 仅用于诊断时可加 `-IncludeDesktop`。
+默认会部署到 Antigravity CLI；Antigravity 2.0 可加 `-IncludeDesktop`。如果 Antigravity IDE 安装在自定义目录，请显式传入：
+
+```powershell
+.\scripts\deploy-antigravity.ps1 -IdeDir "D:\Apps\Antigravity"
+```
 
 #### Windows 常见目录 + 快速跳转
 
@@ -800,7 +804,7 @@ agyp -- --version
 `agyp` 默认会继承你运行命令时的当前工作目录，因此在项目目录里执行 `agyp` 会让 Antigravity CLI 进入该项目目录。需要显式指定目录时可用：
 
 ```powershell
-agyp --cwd "E:\your\project"
+agyp --cwd "D:\path\to\project"
 ```
 
 ### 配置文件详解 / Configuration Reference

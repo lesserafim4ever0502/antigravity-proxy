@@ -242,7 +242,11 @@ This repository also includes a deployment script. After building, run:
 .\scripts\deploy-antigravity.ps1
 ```
 
-By default it deploys to Antigravity IDE and Antigravity CLI. Pass `-IncludeDesktop` only when you want to deploy to Antigravity 2.0 for diagnostics.
+By default it deploys to Antigravity CLI. Pass `-IncludeDesktop` to deploy to Antigravity 2.0. If Antigravity IDE is installed in a custom directory, pass it explicitly:
+
+```powershell
+.\scripts\deploy-antigravity.ps1 -IdeDir "D:\Apps\Antigravity"
+```
 
 #### Common Windows Path + Quick Jump
 
@@ -776,7 +780,7 @@ If the log contains `Antigravity-Proxy DLL 已加载` and `所有 API Hook 安�
 `agyp` inherits the current working directory by default, so running it from a project directory starts Antigravity CLI in that project. To override it explicitly:
 
 ```powershell
-agyp --cwd "E:\your\project"
+agyp --cwd "D:\path\to\project"
 ```
 
 ### Configuration Reference
