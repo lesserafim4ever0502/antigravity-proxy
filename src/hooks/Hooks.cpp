@@ -17,6 +17,7 @@
 #include <mutex>
 #include <atomic>
 #include <memory>
+#include <utility>
 #include "../core/Config.hpp"
 #include "../core/Logger.hpp"
 #include "../network/SocketWrapper.hpp"
@@ -27,6 +28,11 @@
 #include "../network/SocketIo.hpp"
 #include "../network/TrafficMonitor.hpp"
 #include "../injection/ProcessInjector.hpp"
+#include "ProcessName.hpp"
+
+using Hooks::GetCreateProcessTargetBaseNameA;
+using Hooks::IsLanguageServerProcessName;
+using Hooks::ToLowerAsciiCopy;
 
 // ============= 函数指针类型定义 =============
 typedef int (WSAAPI *connect_t)(SOCKET, const struct sockaddr*, int);
@@ -209,7 +215,7 @@ static const size_t kMaxLoggedSkipProcesses = 256; // 限制缓存规模，避�
 
 // 运行时配置摘要仅打印一次，方便收集“别人不行”的现场信息
 static std::once_flag g_runtimeConfigLogOnce;
-// 新版 Antigravity 可能把部分对话链路下沉到 language_server_windows 派生的 node.exe；
+// 新版 Antigravity 可能把部分对话链路下沉到 language_server 派生的 node.exe；
 // 这里仅对该组合做一次兼容提示，避免 filtered 模式下静默漏注入。
 static std::once_flag g_languageServerNodeCompatLogOnce;
 // IP/日志联合诊断只需要在主 Antigravity 进程里启动一次。
@@ -275,12 +281,6 @@ static bool TryGetSocketType(SOCKET s, int* outType) {
     return true;
 }
 
-static std::string ToLowerAsciiCopy(std::string s) {
-    std::transform(s.begin(), s.end(), s.begin(),
-                   [](unsigned char c) { return (char)std::tolower(c); });
-    return s;
-}
-
 static std::string GetCurrentProcessBaseName() {
     static std::string s_cached;
     static std::once_flag s_once;
@@ -297,6 +297,13 @@ static std::string GetCurrentProcessBaseName() {
         }
     });
     return s_cached;
+}
+
+static std::string GetCreateProcessTargetBaseNameW(LPCWSTR applicationName, LPCWSTR commandLine) {
+    const std::string app = WideToUtf8(applicationName);
+    const std::string cmd = WideToUtf8(commandLine);
+    return GetCreateProcessTargetBaseNameA(app.empty() ? nullptr : app.c_str(),
+                                           cmd.empty() ? nullptr : cmd.c_str());
 }
 
 struct AgentExitIpEvidence {
@@ -633,7 +640,7 @@ static void StartAgentIpDiagnosisOnce() {
 
 // 兼容说明：新版 Antigravity 的 language server 可能把真实对话执行链路继续下沉到 node.exe。
 // 为避免用户仍停留在 filtered 模式时漏掉该关键子进程，这里只对
-// `language_server_windows* -> node.exe` 这一条链路做窄范围自动继承注入。
+// 新旧 `language_server* -> node.exe` 这一条链路做窄范围自动继承注入。
 static bool ShouldAutoInjectLanguageServerNodeChild(const Core::Config& config, const std::string& childProcessName) {
     if (!config.childInjection) return false;
     if (ToLowerAsciiCopy(config.childInjectionMode) == "inherit") return false;
@@ -641,15 +648,14 @@ static bool ShouldAutoInjectLanguageServerNodeChild(const Core::Config& config, 
     const std::string lowerChild = ToLowerAsciiCopy(childProcessName);
     if (lowerChild != "node.exe" && lowerChild != "node") return false;
 
-    const std::string lowerCurrent = ToLowerAsciiCopy(GetCurrentProcessBaseName());
-    return lowerCurrent.find("language_server_windows") != std::string::npos;
+    return IsLanguageServerProcessName(GetCurrentProcessBaseName());
 }
 
 static void LogLanguageServerNodeCompatInjectOnce(const std::string& childProcessName) {
     std::call_once(g_languageServerNodeCompatLogOnce, [&childProcessName]() {
         const std::string currentProcessName = GetCurrentProcessBaseName();
         Core::Logger::Warn(
-            "[兼容] 检测到 " + (currentProcessName.empty() ? std::string("language_server_windows 子进程") : currentProcessName) +
+            "[兼容] 检测到 " + (currentProcessName.empty() ? std::string("language_server 子进程") : currentProcessName) +
             " 派生了关键子进程 " + childProcessName +
             "；为兼容新版 Antigravity 对话链路，filtered 模式下将自动继承注入。"
             " 如需关闭该行为，请将 node.exe 加入 child_injection_exclude。");
@@ -3387,26 +3393,8 @@ BOOL WINAPI DetourCreateProcessW(
     );
     
     if (result && needInject && lpProcessInformation) {
-        // 先提取进程名用于过滤检查
-        std::string appName = "Unknown";
-        LPCWSTR targetStr = lpApplicationName ? lpApplicationName : lpCommandLine;
-        if (targetStr) {
-             int len = WideCharToMultiByte(CP_ACP, 0, targetStr, -1, NULL, 0, NULL, NULL);
-             if (len > 0) {
-                 std::vector<char> buf(len);
-                 WideCharToMultiByte(CP_ACP, 0, targetStr, -1, buf.data(), len, NULL, NULL);
-                 appName = buf.data();
-                 // 简单处理：提取文件名
-                 size_t lastSlash = appName.find_last_of("\\/");
-                 if (lastSlash != std::string::npos) appName = appName.substr(lastSlash + 1);
-                 // 去掉可能的引号
-                 if (!appName.empty() && appName.front() == '\"') appName.erase(0, 1);
-                 if (!appName.empty() && appName.back() == '\"') appName.pop_back(); 
-                 // 再次过滤可能的参数（针对 lpCommandLine）
-                 size_t firstSpace = appName.find(' ');
-                 if (firstSpace != std::string::npos) appName = appName.substr(0, firstSpace);
-             }
-        }
+        // 从 CreateProcess 参数提取真实 exe 名；兼容 `Antigravity IDE.exe` 这类带空格文件名。
+        std::string appName = GetCreateProcessTargetBaseNameW(lpApplicationName, lpCommandLine);
         
         const bool excluded = config.IsChildInjectionExcluded(appName);
         const bool compatInject = (!excluded) && ShouldAutoInjectLanguageServerNodeChild(config, appName);
@@ -3506,21 +3494,8 @@ BOOL WINAPI DetourCreateProcessA(
     );
     
     if (result && needInject && lpProcessInformation) {
-        // 先提取进程名用于过滤检查
-        std::string appName = "Unknown";
-        const char* targetStr = lpApplicationName ? lpApplicationName : lpCommandLine;
-        if (targetStr) {
-            appName = targetStr;
-            // 简单处理：提取文件名
-            size_t lastSlash = appName.find_last_of("\\/");
-            if (lastSlash != std::string::npos) appName = appName.substr(lastSlash + 1);
-            // 去掉可能的引号
-            if (!appName.empty() && appName.front() == '\"') appName.erase(0, 1);
-            if (!appName.empty() && appName.back() == '\"') appName.pop_back();
-            // 再次过滤可能的参数（针对 lpCommandLine）
-            size_t firstSpace = appName.find(' ');
-            if (firstSpace != std::string::npos) appName = appName.substr(0, firstSpace);
-        }
+        // 从 CreateProcess 参数提取真实 exe 名；兼容 `Antigravity IDE.exe` 这类带空格文件名。
+        std::string appName = GetCreateProcessTargetBaseNameA(lpApplicationName, lpCommandLine);
         
         const bool excluded = config.IsChildInjectionExcluded(appName);
         const bool compatInject = (!excluded) && ShouldAutoInjectLanguageServerNodeChild(config, appName);

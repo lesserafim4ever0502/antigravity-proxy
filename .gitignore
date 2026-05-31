@@ -53,3 +53,4 @@ log/
 build/
 build-x64/
 build-x86/
+build-process-name-tests/

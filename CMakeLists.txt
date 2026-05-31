@@ -105,23 +105,35 @@ target_include_directories(version PRIVATE "src/hde/")
 # Link WS2_32
 target_link_libraries(version PRIVATE ws2_32)
 
+# Build Antigravity CLI shim (输出名为 dbghelp.dll)
+add_library(dbghelp SHARED
+  "src/proxy/DbgHelpShim.cpp"
+)
+
 if(WIN32)
   set_target_properties(version PROPERTIES PREFIX "")
+  set_target_properties(dbghelp PROPERTIES PREFIX "")
   if(CMAKE_SIZEOF_VOID_P EQUAL 8)   
     set_target_properties(version PROPERTIES OUTPUT_NAME "version")
+    set_target_properties(dbghelp PROPERTIES OUTPUT_NAME "dbghelp")
     set_target_properties(version PROPERTIES DEBUG_POSTFIX ".x64d")
+    set_target_properties(dbghelp PROPERTIES DEBUG_POSTFIX ".x64d")
     set_target_properties(version PROPERTIES RELEASE_POSTFIX "")
+    set_target_properties(dbghelp PROPERTIES RELEASE_POSTFIX "")
   else()
     set_target_properties(version PROPERTIES OUTPUT_NAME "version")
+    set_target_properties(dbghelp PROPERTIES OUTPUT_NAME "dbghelp")
     set_target_properties(version PROPERTIES DEBUG_POSTFIX ".x32d")
+    set_target_properties(dbghelp PROPERTIES DEBUG_POSTFIX ".x32d")
     set_target_properties(version PROPERTIES RELEASE_POSTFIX "")
+    set_target_properties(dbghelp PROPERTIES RELEASE_POSTFIX "")
   endif()
 endif()
 
 ###################
 #     INSTALL     #
 ###################
-install(TARGETS version RUNTIME DESTINATION "bin")
+install(TARGETS version dbghelp RUNTIME DESTINATION "bin")
 
 ###################
 #      TESTS      #
@@ -138,4 +150,12 @@ if(BUILD_TESTS)
   )
   target_link_libraries(antigravity_tests PRIVATE ws2_32)
   add_test(NAME antigravity_tests COMMAND antigravity_tests)
+
+  add_executable(process_name_tests
+    "tests/test_process_name.cpp"
+  )
+  target_include_directories(process_name_tests PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/src"
+  )
+  add_test(NAME process_name_tests COMMAND process_name_tests)
 endif()

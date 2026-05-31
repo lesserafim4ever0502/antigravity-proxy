@@ -220,8 +220,9 @@ curl -x http://127.0.0.1:7890 https://www.google.com -I
 
 ### Step 2: Get the Files
 
-You need two files:
+You need these files:
 - `version.dll`
+- `dbghelp.dll` (Antigravity CLI only)
 - `config.json`
 
 (Download from Releases, or build them yourself.)
@@ -229,6 +230,29 @@ You need two files:
 ### Step 3: Deploy to Antigravity
 
 Copy `version.dll` and `config.json` to Antigravity’s main program directory (next to `Antigravity.exe`). Then launch Antigravity — done.
+
+For **Antigravity CLI**, copy `dbghelp.dll`, `version.dll`, and `config.json` next to `agy.exe`. `agy.exe` loads the colocated `dbghelp.dll`, which then loads `version.dll`; no separate launcher is required.
+
+#### Antigravity 2.0 Notes
+
+Antigravity 2.0 added/renamed key processes. The default config now covers:
+
+```json
+"target_processes": [
+  "agy.exe",
+  "language_server.exe",
+  "language_server_windows",
+  "Antigravity.exe",
+  "Antigravity IDE.exe",
+  "node.exe"
+]
+```
+
+If you are migrating an old `config.json`, make sure `child_injection` is still `true` and sync the target process list above. If your 2.0 install has more than one launch directory, place `version.dll` and `config.json` in the actual Antigravity/IDE directory being launched.
+
+Antigravity updates may clean injected files from the install directory. If proxying stops after an update, copy the files again. If your proxy client separates mixed-port and SOCKS5 ports, make sure `proxy.type` and `proxy.port` match the actual local listener.
+
+More field notes: `docs/antigravity-2.0-issue-85.md`.
 
 #### Common Windows Path + Quick Jump
 
@@ -674,6 +698,7 @@ target_link_libraries(version PRIVATE ws2_32)
 
 After building, you'll get these files in the `output` directory:
 - `version.dll` - Proxy DLL
+- `dbghelp.dll` - Antigravity CLI shim DLL
 - `config.json` - Configuration file
 
 #### Step 2: Configure Proxy
@@ -697,7 +722,15 @@ Edit `config.json`:
         "recv": 5000
     },
     "child_injection": true,
-    "target_processes": []
+    "child_injection_mode": "filtered",
+    "target_processes": [
+        "agy.exe",
+        "language_server.exe",
+        "language_server_windows",
+        "Antigravity.exe",
+        "Antigravity IDE.exe",
+        "node.exe"
+    ]
 }
 ```
 

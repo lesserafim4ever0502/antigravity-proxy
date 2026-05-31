@@ -27,7 +27,7 @@ param(
 # ============================================================
 # 版本信息 (在此处统一管理版本号)
 # ============================================================
-$Version = "1.9"
+$Version = "2.1"
 
 # ============================================================
 # 辅助函数
@@ -265,13 +265,20 @@ Write-Step "查找编译产物..."
 
 $dllPattern = if ($Config -eq "Debug") { "version*.dll" } else { "version.dll" }
 $dllPath = Get-ChildItem -Path $BuildDir -Recurse -Filter $dllPattern | Select-Object -First 1
+$dbghelpPattern = if ($Config -eq "Debug") { "dbghelp*.dll" } else { "dbghelp.dll" }
+$dbghelpPath = Get-ChildItem -Path $BuildDir -Recurse -Filter $dbghelpPattern | Select-Object -First 1
 
 if (-not $dllPath) {
     Write-Error "未找到编译产物 DLL"
     exit 1
 }
+if (-not $dbghelpPath) {
+    Write-Error "未找到 Antigravity CLI dbghelp.dll 劫持产物"
+    exit 1
+}
 
 Write-Success "找到 DLL: $($dllPath.FullName)"
+Write-Success "找到 CLI dbghelp.dll: $($dbghelpPath.FullName)"
 
 # ============================================================
 # 步骤 7: 创建输出目录并复制文件
@@ -285,6 +292,8 @@ if (-not (Test-Path $OutputDir)) {
 
 Copy-Item $dllPath.FullName -Destination $OutputDir -Force
 Write-Success "DLL 已复制到 output 目录"
+Copy-Item $dbghelpPath.FullName -Destination $OutputDir -Force
+Write-Success "CLI dbghelp.dll 已复制到 output 目录"
 
 # ============================================================
 # 步骤 8: 生成配置文件
@@ -323,7 +332,8 @@ $configJson = @{
     # 子进程注入排除列表（大小写不敏感，支持子串匹配）
     child_injection_exclude = @()
     # 目标进程列表（空数组=注入所有子进程）
-    target_processes = @("language_server_windows", "Antigravity.exe", "node.exe")
+    # 兼容 Antigravity 2.0 新增的 language_server.exe，同时覆盖 Antigravity CLI 的 agy.exe。
+    target_processes = @("agy.exe", "language_server.exe", "language_server_windows", "Antigravity.exe", "Antigravity IDE.exe", "node.exe")
     proxy_rules = @{
         # 端口白名单: 仅代理 HTTP(80) 和 HTTPS(443)，空数组=代理所有端口
         allowed_ports = @(80, 443)
@@ -396,7 +406,10 @@ FAILED_PRECONDITION (code 400): User location is not supported for the API use.
 ### 1. 部署文件
 将以下文件复制到目标程序的目录：
 - ` version.dll ` (编译生成的 DLL)
+- ` dbghelp.dll ` (Antigravity CLI 的 agy.exe 需要)
 - ` config.json ` (配置文件)
+
+Antigravity CLI 需要把 `dbghelp.dll`、`version.dll` 和 `config.json` 放到 `agy.exe` 同级目录；Antigravity 桌面端/IDE 仍只需要 `version.dll` 和 `config.json`。
 
 ### 2. 配置代理
 编辑 `config.json`，设置代理服务器地址：
@@ -507,7 +520,7 @@ Test-NetConnection -ComputerName 127.0.0.1 -Port 7890
 ### 配置示例
 ```json
 {
-    "target_processes": ["language_server_windows", "Antigravity.exe", "node.exe"],
+    "target_processes": ["agy.exe", "language_server.exe", "language_server_windows", "Antigravity.exe", "Antigravity IDE.exe", "node.exe"],
     "child_injection_mode": "filtered",
     "child_injection_exclude": ["unwanted_process.exe"]
 }
