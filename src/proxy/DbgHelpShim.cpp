@@ -51,10 +51,7 @@ extern "C" __declspec(dllexport) BOOL WINAPI SymFromAddr(
 BOOL APIENTRY DllMain(HMODULE module, DWORD reason, LPVOID) {
     if (reason == DLL_PROCESS_ATTACH) {
         DisableThreadLibraryCalls(module);
-        const HANDLE thread = CreateThread(nullptr, 0, LoadVersionDll, nullptr, 0, nullptr);
-        if (thread) {
-            CloseHandle(thread);
-        }
+        LoadVersionDll(nullptr);
     }
     return TRUE;
 }
